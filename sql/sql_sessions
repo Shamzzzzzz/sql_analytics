@@ -1,0 +1,39 @@
+WITH events_with_lag AS (
+    SELECT
+        customer_id,
+        event_timestamp,
+        LAG(event_timestamp) OVER (
+            PARTITION BY customer_id
+            ORDER BY event_timestamp
+        ) AS prev_event_time
+    FROM customer_actions
+),
+session_boundaries AS (
+    SELECT
+        customer_id,
+        event_timestamp,
+        CASE
+            WHEN prev_event_time IS NULL
+                 OR (event_timestamp - prev_event_time) > INTERVAL '30 minutes'
+                THEN 1
+            ELSE 0
+        END AS is_new_session
+    FROM events_with_lag
+),
+sessions AS (
+    SELECT
+        customer_id,
+        event_timestamp,
+        SUM(is_new_session) OVER (
+            PARTITION BY customer_id
+            ORDER BY event_timestamp
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS session_num
+    FROM session_boundaries
+)
+SELECT
+    customer_id,
+    event_timestamp,
+    CONCAT(customer_id , '_', session_num) AS session_id
+FROM sessions
+ORDER BY customer_id, event_timestamp;
