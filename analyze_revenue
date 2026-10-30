@@ -1,0 +1,28 @@
+with start_month_revenue as 
+(select distinct
+date_trunc('month', s.order_date)::date as start_month
+,ROUND(
+    SUM(
+        p.price * s.quantity *
+        (1 - COALESCE(s.discount_percent, 0) / 100.0)
+    ),
+    2
+) AS revenue
+from sales s 
+join products p 
+on p.product_id = s.product_id 
+where s.status = 'completed'
+and s.order_date >= '2024-01-01' and s.order_date < '2024-06-01'
+group by "month" 
+)
+,prev_month as (
+select 
+*
+,lag(revenue) over(order by "month" ) as prev_order
+from start_month_revenue)
+select 
+*
+from cte2 
+where prev is not null
+and revenue > prev_order
+order by "month" 
